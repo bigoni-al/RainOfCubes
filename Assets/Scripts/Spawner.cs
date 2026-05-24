@@ -6,15 +6,13 @@ public class Spawner : MonoBehaviour
 {
     [SerializeField] private Transform _spawner;
     [SerializeField] private Cube _cubePrefab;
-    [SerializeField] private Platform[] _platforms;
-    [SerializeField] private float _repeatRate = 1f;
+    [SerializeField] private float _delay = 1f;
     [SerializeField] private int _poolCapacity = 20;
     [SerializeField] private int _poolMaxSize = 20;
 
-    private float _delay = 0f;
     private float _shiftPositionX = 10f;
     private float _shiftPositionZ = 10f;
-
+    private WaitForSecondsRealtime _wait;
     private ObjectPool<Cube> _pool;
 
     private void Awake()
@@ -27,47 +25,30 @@ public class Spawner : MonoBehaviour
             collectionCheck: true,
             defaultCapacity: _poolCapacity,
             maxSize: _poolMaxSize);
-    }
 
-    private void OnEnable()
-    {
-        foreach (var platform in _platforms) 
-        {
-            platform.CubeCrashed += TryReturnToPool;
-        }
-    }
-
-    private void OnDisable()
-    {
-        foreach (var platform in _platforms)
-        {
-            platform.CubeCrashed -= TryReturnToPool;
-        }
+        _wait = new WaitForSecondsRealtime(_delay);
     }
 
     private void Start()
     {
-        InvokeRepeating(nameof(GetCube), _delay, _repeatRate);
+        StartCoroutine(CreateCubes());
     }
 
     private void ActionOnGet(Cube obj)
-    {   
+    {
         obj.transform.position = GetStartPosition();
         obj.gameObject.SetActive(true);
+        obj.LifeExpired += ReturnToPool;
     }
 
-    private void ActionOnRelease(Cube obj) 
+    private void ActionOnRelease(Cube obj)
     {
         obj.ResetState();
         obj.gameObject.SetActive(false);
+        obj.LifeExpired -= ReturnToPool;
     }
 
-    private void GetCube()
-    {
-        _pool.Get();
-    }
-
-    private Vector3 GetStartPosition() 
+    private Vector3 GetStartPosition()
     {
         Vector3 newPosition = new(
             Random.Range(_spawner.transform.position.x - _shiftPositionX, _spawner.transform.position.x + _shiftPositionX),
@@ -77,20 +58,18 @@ public class Spawner : MonoBehaviour
         return newPosition;
     }
 
-    public void TryReturnToPool(Cube cube) 
+    private IEnumerator CreateCubes()
     {
-        if (cube.HaveDefaulColor)
+        while (true)
         {
-            cube.ChangeColor();
-            float lifeTime = cube.GetLifeTime();
-            StartCoroutine(ReturnToPool(cube, lifeTime));
+            yield return _wait;
+
+            _pool.Get();
         }
     }
 
-    private IEnumerator ReturnToPool(Cube cube, float delay) 
+    private void ReturnToPool(Cube cube)
     {
-        yield return new WaitForSecondsRealtime(delay);
-        
         _pool.Release(cube);
     }
 }
